@@ -2,11 +2,11 @@ import os
 import subprocess
 import time
 import json
-import paho.mqtt.client as mqtt
+from influxdb import InfluxDBClient
 
 class speedtest():
     def test(self):
-        args = ['./speedtest', '-a', '-f', 'json', '--accept-license', '--accept-gdpr']
+        args = ['speedtest', '-a', '-f', 'json', '--accept-license', '--accept-gdpr']
 
         if os.environ.get('SERVER_ID') != None:
             args.append('-s')
@@ -24,14 +24,14 @@ class speedtest():
         print ("Server = " + str(result['server']))
         return result
 
+
+influx_client = InfluxDBClient(host='influxdb', port=8086, username='root',
+                        password='root', ssl=False, verify_ssl=False)
+influx_client.switch_database('balena')
 speedtest = speedtest()
 frequency = os.environ.get('FREQUENCY') or 3600
-broker_address = os.environ.get('MQTT_BROKER') or "localhost"
-
-client = mqtt.Client("1")
 
 while True:
-    client.connect(broker_address)
     result = speedtest.test()
     json_body = [
         {
@@ -49,12 +49,10 @@ while True:
     ]
 
     print("JSON body = " + str(json_body))
-    msg_info = client.publish("speedtest",json.dumps(json_body))
-    if msg_info.is_published() == False:
-            msg_info.wait_for_publish()
-    client.disconnect()
+    try:
+        influx_client.write_points(json_body)
+        print("to db...")
+    except:
+      print('An exception occurred')
+    
     time.sleep(int(frequency))
-
-
-
-
